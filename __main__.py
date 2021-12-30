@@ -81,7 +81,7 @@ class NickServ(Communicator):
                 self.send(f"Username {username} is registered to {exp}; please choose another one.\r\n/rename {username} {new}\r\n")
                 username = new
         else:
-            self.send(f"/msg {username} Hi there! I'm NickServ. I help register nicks on this chat. You can use !register to reserve this nick ({username}) for yourself, so that others can't use it to impersonate you (or use !help for more info).")
+            self.send(f"/msg {username} Hi there! I'm NickServ. I help register nicks on this chat. You can use !register to reserve this nick ({username}) for yourself, so that others can't use it to impersonate you (or use !help for more info).\r\n")
 
         prefixes = await self.get_prefixes_for_user(username, whois)
         if prefixes:
@@ -210,8 +210,8 @@ class NickServ(Communicator):
             whois = await self.whois(username)
 
         prefixes = ""
-        if whois["fingerprint"] == self.settings["registered_usernames"].get(username):
-            prefixes += "*"
+        if whois["fingerprint"] != self.settings["registered_usernames"].get(username):
+            prefixes += "!"
         if "room/op" in whois:
             prefixes = "@"
 

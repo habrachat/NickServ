@@ -49,7 +49,7 @@ class Communicator:
             for line in info.split("\n"):
                 key, value = line.split(": ", 1)
                 data[key] = value
-            name = data["name"].lstrip("@* ")
+            name = data["name"].lstrip("@! ")
             key = "/whois " + name
         elif re.match(r"^\d+ connected: ", info):
             # names
