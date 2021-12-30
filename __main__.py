@@ -107,7 +107,7 @@ class NickServ(Communicator):
         if command == "help":
             self.do_help(*args)
         elif command == "register":
-            await self.do_register(username)
+            await self.do_register(username, *args)
         elif command == "unregister":
             await self.do_unregister(username)
         elif command == "ban":
@@ -133,8 +133,11 @@ class NickServ(Communicator):
             self.send(f"Unknown topic !{topic}\r\n")
 
 
-    async def do_register(self, username):
-        if username in self.settings["registered_usernames"]:
+    async def do_register(self, username, wanted_username=None, *_):
+        if wanted_username is None:
+            wanted_username = username
+
+        if wanted_username in self.settings["registered_usernames"]:
             self.send(f"This username is already registered\r\n")
             return
 
@@ -143,11 +146,14 @@ class NickServ(Communicator):
             self.send(f"You cannot register this username because you are not authorized by public key.\r\n")
             return
 
-        self.settings["registered_usernames"][username] = whois["fingerprint"]
+        self.settings["registered_usernames"][wanted_username] = whois["fingerprint"]
         self.save_settings()
-        self.send(f"{username} is now registered to {whois['fingerprint']}.\r\n")
+        self.send(f"{wanted_username} is now registered to {whois['fingerprint']}.\r\n")
 
         await self.update_user_prefixes(username, whois)
+
+        if username != wanted_username:
+            self.send(f"/rename {username} {wanted_username}\r\n")
 
 
     async def do_unregister(self, username):
