@@ -109,7 +109,7 @@ class NickServ(Communicator):
         elif command == "register":
             await self.do_register(username, *args)
         elif command == "unregister":
-            await self.do_unregister(username)
+            await self.do_unregister(username, *args)
         elif command == "ban":
             await self.do_ban(username, *args)
         elif command == "banip":
@@ -156,21 +156,21 @@ class NickServ(Communicator):
             self.send(f"/rename {username} {wanted_username}\r\n")
 
 
-    async def do_unregister(self, username):
-        if username not in self.settings["registered_usernames"]:
+    async def do_unregister(self, username, wanted_username=None, *_):
+        if wanted_username not in self.settings["registered_usernames"]:
             self.send(f"This username is not registered\r\n")
             return
 
         whois = await self.whois(username)
-        if self.settings["registered_usernames"][username] != whois["fingerprint"]:
+        if self.settings["registered_usernames"][wanted_username] != whois["fingerprint"] and "room/op" not in whois:
             self.send(f"This username is not registered to you\r\n")
             return
 
-        del self.settings["registered_usernames"][username]
+        del self.settings["registered_usernames"][wanted_username]
         self.save_settings()
-        self.send(f"{username} is not registered anymore.\r\n")
+        self.send(f"{wanted_username} is not registered anymore.\r\n")
 
-        await self.update_user_prefixes(username, whois)
+        await self.update_user_prefixes(wanted_username)
 
 
     async def do_ban(self, username, *args):
