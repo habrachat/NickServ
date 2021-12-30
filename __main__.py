@@ -215,8 +215,8 @@ class NickServ(Communicator):
     async def update_user_prefixes(self, username, whois=None):
         prefixes = await self.get_prefixes_for_user(username, whois)
 
-        if whois["name"] != (prefixes + (" " if prefixes else "") + name):
-            self.send(f"/rename {name} {name} {prefixes or 'remove'}\r\n")
+        if whois["name"] != (prefixes + (" " if prefixes else "") + username):
+            self.send(f"/rename {username} {username} {prefixes or 'remove'}\r\n")
 
 
 nickserv = NickServ()
