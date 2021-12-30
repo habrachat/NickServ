@@ -85,10 +85,18 @@ class Communicator:
         loop = asyncio.get_running_loop()
         iterator = self.__blocking_generator()
 
+        def do_next():
+            try:
+                return iterator.__next__()
+            except StopIteration:
+                return None
+
         current_info_block = ""
 
         while True:
-            line = await loop.run_in_executor(None, iterator.__next__)
+            line = await loop.run_in_executor(None, do_next)
+            if line is None:
+                break
 
             if line.endswith("\x1b[0m"):
                 line = line[:-4]

@@ -234,5 +234,7 @@ async def main():
 
     await nickserv.serve()
 
+    raise ValueError("Server is down")
+
 
 asyncio.run(main())
