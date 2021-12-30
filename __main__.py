@@ -47,9 +47,7 @@ class NickServ(Communicator):
         names = await self.names()
         for name in names:
             whois = await self.whois(name)
-            prefixes = await self.get_prefixes_for_user(name, whois)
-            if prefixes and whois["name"] != f"{prefixes} {name}":
-                self.send(f"/rename {name} {name} {prefixes}\r\n")
+            await self.update_user_prefixes(name, whois)
 
 
     async def on_event(self, event):
@@ -83,9 +81,7 @@ class NickServ(Communicator):
         else:
             self.send(f"/msg {username} Hi there! I'm NickServ. I help register nicks on this chat. You can use !register to reserve this nick ({username}) for yourself, so that others can't use it to impersonate you (or use !help for more info).\r\n")
 
-        prefixes = await self.get_prefixes_for_user(username, whois)
-        if prefixes:
-            self.send(f"/rename {username} {username} {prefixes}\r\n")
+        await self.update_user_prefixes(username, whois)
 
 
     async def on_user_renamed(self, old, new):
@@ -149,9 +145,7 @@ class NickServ(Communicator):
         self.save_settings()
         self.send(f"{username} is now registered to {whois['fingerprint']}.\r\n")
 
-        prefixes = await self.get_prefixes_for_user(username, whois)
-        if prefixes:
-            self.send(f"/rename {username} {username} {prefixes}\r\n")
+        await self.update_user_prefixes(username, whois)
 
 
     async def do_unregister(self, username):
@@ -168,9 +162,7 @@ class NickServ(Communicator):
         self.save_settings()
         self.send(f"{username} is not registered anymore.\r\n")
 
-        prefixes = await self.get_prefixes_for_user(username, whois)
-        if prefixes:
-            self.send(f"/rename {username} {username} {prefixes}\r\n")
+        await self.update_user_prefixes(username, whois)
 
 
     async def do_ban(self, username, *args):
@@ -216,6 +208,13 @@ class NickServ(Communicator):
             prefixes = "@"
 
         return prefixes
+
+
+    async def update_user_prefixes(self, username, whois=None):
+        prefixes = await self.get_prefixes_for_user(username, whois)
+
+        if whois["name"] != (prefixes + (" " if prefixes else "") + name):
+            self.send(f"/rename {name} {name} {prefixes or 'remove'}\r\n")
 
 
 nickserv = NickServ()
