@@ -97,6 +97,8 @@ class NickServ(Communicator):
                 return
 
             await self.update_user_prefixes(new, whois)
+        else:
+            await self.update_user_prefixes(new)
 
 
     async def on_message(self, username, message):
