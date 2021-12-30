@@ -114,7 +114,7 @@ class NickServ(Communicator):
             await self.do_ban(username, *args)
         elif command == "banip":
             await self.do_banip(username, *args)
-        elif commands in ("exit", "quit", "names"):
+        elif command in ("exit", "quit", "names"):
             self.send(f"You're probably confusing me with the chat system. Use /{command} instead of !{command}.\r\n")
 
 
