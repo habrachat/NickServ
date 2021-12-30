@@ -211,7 +211,7 @@ class NickServ(Communicator):
 
         prefixes = ""
         if whois["fingerprint"] != self.settings["registered_usernames"].get(username):
-            prefixes += "!"
+            prefixes += "?"
         if "room/op" in whois:
             prefixes = "@"
 
