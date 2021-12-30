@@ -96,6 +96,8 @@ class NickServ(Communicator):
                 self.send(f"Username {new} is registered to {exp}; please choose another one.\r\n/rename {new} {old}\r\n")
                 return
 
+            await self.update_user_prefixes(new, whois)
+
 
     async def on_message(self, username, message):
         if not message.startswith("!"):
