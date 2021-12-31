@@ -161,6 +161,9 @@ class NickServ(Communicator):
 
 
     async def do_unregister(self, username, wanted_username=None, *_):
+        if wanted_username is None:
+            wanted_username = username
+
         if wanted_username not in self.settings["registered_usernames"]:
             self.send(f"This username is not registered\r\n")
             return
