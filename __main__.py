@@ -20,15 +20,26 @@ class NickServ(Communicator):
             self.settings["banned_usernames"] = []
         if "banned_ips" not in self.settings:
             self.settings["banned_ips"] = []
-        if "registered_usernames" not in self.settings:
+
+        if "registered_usernames" in self.settings:
+            self.settings["registered_usernames"] = {
+                username: {fingerprints} if isinstance(fingerprints, str) else set(fingerprints)
+                for username, fingerprints in self.settings["registered_usernames"].items()
+            }
+        else:
             self.settings["registered_usernames"] = {}
-        if "op_fingerprints" not in self.settings:
-            self.settings["op_fingerprints"] = []
 
 
     def save_settings(self):
-        with open(self.settings_path, "w") as f:
-            f.write(json.dumps(self.settings))
+        with open(self.settings_path + ".tmp", "w") as f:
+            f.write(json.dumps({
+                **self.settings,
+                "registered_usernames": {
+                    username: list(fingerprints)
+                    for username, fingerprints in self.settings["registered_usernames"].items()
+                }
+            }))
+        os.rename(self.settings_path + ".tmp", self.settings_path)
 
 
     def is_username_banned(self, username):
@@ -74,9 +85,10 @@ class NickServ(Communicator):
 
         if username in self.settings["registered_usernames"]:
             exp = self.settings["registered_usernames"][username]
-            if exp != whois["fingerprint"]:
+            fingerprint = whois["fingerprint"]
+            if fingerprint not in exp:
                 new = self.make_rand_name()
-                self.send(f"Username {username} is registered to {exp}; please choose another one.\r\n/rename {username} {new}\r\n")
+                self.send(f"Username {username} is registered to {exp}; please choose another one. If this is your account, please log in with the old key and do !trust {fingerprint}\r\n/rename {username} {new}\r\n")
                 username = new
         else:
             self.send(f"/msg {username} Hi there! I'm NickServ. I help register nicks on this chat. You can use !register to reserve this nick ({username}) for yourself, so that others can't use it to impersonate you (or use !help for more info).\r\n")
@@ -92,7 +104,7 @@ class NickServ(Communicator):
         if new in self.settings["registered_usernames"]:
             whois = await self.whois(new)
             exp = self.settings["registered_usernames"][new]
-            if exp != whois["fingerprint"]:
+            if whois["fingerprint"] not in exp:
                 self.send(f"Username {new} is registered to {exp}; please choose another one.\r\n/rename {new} {old}\r\n")
                 return
 
@@ -114,6 +126,10 @@ class NickServ(Communicator):
             await self.do_register(username, *args)
         elif command == "unregister":
             await self.do_unregister(username, *args)
+        elif command == "trust":
+            await self.do_trust(username, *args)
+        elif command == "distrust":
+            await self.do_distrust(username, *args)
         elif command == "ban":
             await self.do_ban(username, *args)
         elif command == "banip":
@@ -124,15 +140,19 @@ class NickServ(Communicator):
 
     def do_help(self, topic="help", *_):
         if topic == "help":
-            self.send("Hi, I'm NickServ. Here's what I can do: !help !register !unregister !ban !banip. Use '!help [topic]' for more info.\r\n")
+            self.send("Hi, I'm NickServ. Here's what I can do: !help !register !unregister !trust !distrust !ban !banip. Use '!help [topic]' for more info.\r\n")
         elif topic == "register":
-            self.send("Use !register to reserve a username for yourself (i.e.: only your SSH key will be allowed to use it).\r\n")
+            self.send("Use !register to reserve a username for yourself (i.e.: only your SSH key will be allowed to use it). Example: !register to register your current name, !register <nickname> to register another name.\r\n")
         elif topic == "unregister":
-            self.send("The inverse of !register (duh)\r\n")
+            self.send("The inverse of !register (duh). Use !unregister to unregister your current username, or !unregister <nickname> to free up another name you are controlling.\r\n")
+        elif topic == "trust":
+            self.send("Register your username to another SSH key. Example: !trust <fingerprint>, !trust <fingerprint> <username>.\r\n")
+        elif topic == "distrust":
+            self.send("If your username is registered to multiple SSH keys, remove one key from the trust list. Examples: !distrust (removes current key), !distrust <fingerprint> (removes some fingerprint), !distrust <fingerprint> <username>.\r\n")
         elif topic == "ban":
-            self.send("Ban user(s) by username\r\n")
+            self.send("Ban user(s) by username (for OPs only)\r\n")
         elif topic == "banip":
-            self.send("Ban user(s) by IP\r\n")
+            self.send("Ban user(s) by IP (for OPs only)\r\n")
         else:
             self.send(f"Unknown topic !{topic}\r\n")
 
@@ -150,7 +170,9 @@ class NickServ(Communicator):
             self.send(f"You cannot register this username because you are not authorized by public key.\r\n")
             return
 
-        self.settings["registered_usernames"][wanted_username] = whois["fingerprint"]
+        if wanted_username not in self.settings["registered_usernames"]:
+            self.settings["registered_usernames"][wanted_username] = set()
+        self.settings["registered_usernames"][wanted_username].add(whois["fingerprint"])
         self.save_settings()
         self.send(f"{wanted_username} is now registered to {whois['fingerprint']}.\r\n")
 
@@ -169,7 +191,7 @@ class NickServ(Communicator):
             return
 
         whois = await self.whois(username)
-        if self.settings["registered_usernames"][wanted_username] != whois["fingerprint"] and "room/op" not in whois:
+        if whois["fingerprint"] not in self.settings["registered_usernames"][wanted_username] and "room/op" not in whois:
             self.send(f"This username is not registered to you\r\n")
             return
 
@@ -178,6 +200,57 @@ class NickServ(Communicator):
         self.send(f"{wanted_username} is not registered anymore.\r\n")
 
         await self.update_user_prefixes(wanted_username)
+
+
+    async def do_trust(self, username, added_fingerprint=None, added_username=None, *_):
+        whois = await self.whois(username)
+        fingerprint = whois["fingerprint"]
+        if added_fingerprint is None:
+            added_fingerprint = fingerprint
+
+        if added_username is None:
+            added_username = username
+
+        if added_username not in self.settings["registered_usernames"]:
+            self.send(f"This username is not registered\r\n")
+            return
+        if "room/op" not in whois and fingerprint not in self.settings["registered_usernames"][added_username]:
+            self.send(f"{added_username} is not controlled by you\r\n")
+            return
+        if added_fingerprint in self.settings["registered_usernames"][added_username]:
+            self.send(f"{added_username} is already registered to {added_fingerprint}\r\n")
+            return
+
+        self.settings["registered_usernames"][added_username].add(added_fingerprint)
+        self.save_settings()
+        self.send(f"{added_fingerprint} is registered to {added_username} now.\r\n")
+
+
+    async def do_distrust(self, username, removed_fingerprint=None, removed_username=None, *_):
+        whois = await self.whois(username)
+        fingerprint = whois["fingerprint"]
+        if removed_fingerprint is None:
+            removed_fingerprint = fingerprint
+
+        if removed_username is None:
+            removed_username = username
+
+        if removed_username not in self.settings["registered_usernames"]:
+            self.send(f"This username is not registered\r\n")
+            return
+        if "room/op" not in whois and fingerprint not in self.settings["registered_usernames"][removed_username]:
+            self.send(f"{removed_username} is not controlled by you\r\n")
+            return
+        if removed_fingerprint not in self.settings["registered_usernames"][removed_username]:
+            self.send(f"{removed_username} is not registered to {removed_fingerprint}\r\n")
+            return
+        if len(self.settings["registered_usernames"][removed_username]) == 1:
+            self.send(f"{removed_username} has only one trusted fingerprint. If you remove it, you'll lose access to the account. If certain, use !unregister instead.\r\n")
+            return
+
+        self.settings["registered_usernames"][removed_username].remove(removed_fingerprint)
+        self.save_settings()
+        self.send(f"{removed_fingerprint} is not registered to {removed_username} anymore.\r\n")
 
 
     async def do_ban(self, username, *args):
@@ -217,7 +290,7 @@ class NickServ(Communicator):
             whois = await self.whois(username)
 
         prefixes = ""
-        if whois["fingerprint"] != self.settings["registered_usernames"].get(username):
+        if whois["fingerprint"] not in self.settings["registered_usernames"].get(username, []):
             prefixes += "?"
         if "room/op" in whois:
             prefixes = "@"
