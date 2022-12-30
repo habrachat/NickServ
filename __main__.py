@@ -42,8 +42,13 @@ class NickServ(Communicator):
         os.rename(self.settings_path + ".tmp", self.settings_path)
 
 
+    def get_username_main(self, username):
+        return username.partition("+")[0]
+
+
     def is_username_banned(self, username):
-        return any(fnmatch.fnmatch(username, glob) for glob in self.settings["banned_usernames"])
+        main = self.get_username_main(username)
+        return any(fnmatch.fnmatch(username, glob) or fnmatch.fnmatch(main, glob) for glob in self.settings["banned_usernames"])
 
 
     def is_ip_banned(self, ip):
@@ -57,8 +62,7 @@ class NickServ(Communicator):
     async def init(self):
         names = await self.names()
         for name in names:
-            whois = await self.whois(name)
-            await self.update_user_prefixes(name, whois)
+            await self.update_user_prefixes(name)
 
 
     async def on_event(self, event):
@@ -83,8 +87,9 @@ class NickServ(Communicator):
             self.send(f"{username}, sorry, your IP is banned\r\n/kick {username}\r\n")
             return
 
-        if username in self.settings["registered_usernames"]:
-            exp = self.settings["registered_usernames"][username]
+        main = self.get_username_main(username)
+        if main in self.settings["registered_usernames"]:
+            exp = self.settings["registered_usernames"][main]
             fingerprint = whois["fingerprint"]
             if fingerprint not in exp:
                 new = self.make_rand_name()
@@ -101,9 +106,11 @@ class NickServ(Communicator):
             self.send(f"{new}, sorry, this username is banned\r\n/rename {new} {old}\r\n")
             return
 
-        if new in self.settings["registered_usernames"]:
+        new_main = self.get_username_main(new)
+
+        if new_main in self.settings["registered_usernames"]:
             whois = await self.whois(new)
-            exp = self.settings["registered_usernames"][new]
+            exp = self.settings["registered_usernames"][new_main]
             if whois["fingerprint"] not in exp:
                 self.send(f"Username {new} is registered to {exp}; please choose another one.\r\n/rename {new} {old}\r\n")
                 return
@@ -139,6 +146,8 @@ class NickServ(Communicator):
 
 
     def do_help(self, topic="help", *_):
+        if topic.startswith("!"):
+            topic = topic[1:]
         if topic == "help":
             self.send("Hi, I'm NickServ. Here's what I can do: !help !register !unregister !trust !distrust !ban !banip. Use '!help [topic]' for more info.\r\n")
         elif topic == "register":
@@ -160,6 +169,7 @@ class NickServ(Communicator):
     async def do_register(self, username, wanted_username=None, *_):
         if wanted_username is None:
             wanted_username = username
+        wanted_username = self.get_username_main(wanted_username)
 
         if wanted_username in self.settings["registered_usernames"]:
             self.send(f"This username is already registered\r\n")
@@ -178,13 +188,14 @@ class NickServ(Communicator):
 
         await self.update_user_prefixes(username, whois)
 
-        if username != wanted_username:
+        if self.get_username_main(username) != wanted_username:
             self.send(f"/rename {username} {wanted_username}\r\n")
 
 
     async def do_unregister(self, username, wanted_username=None, *_):
         if wanted_username is None:
             wanted_username = username
+        wanted_username = self.get_username_main(wanted_username)
 
         if wanted_username not in self.settings["registered_usernames"]:
             self.send(f"This username is not registered\r\n")
@@ -199,7 +210,10 @@ class NickServ(Communicator):
         self.save_settings()
         self.send(f"{wanted_username} is not registered anymore.\r\n")
 
-        await self.update_user_prefixes(wanted_username)
+        names = await self.names()
+        for name in names:
+            if self.get_username_main(name) == wanted_username:
+                await self.update_user_prefixes(name)
 
 
     async def do_trust(self, username, added_fingerprint=None, added_username=None, *_):
@@ -210,6 +224,7 @@ class NickServ(Communicator):
 
         if added_username is None:
             added_username = username
+        added_username = self.get_username_main(added_username)
 
         if added_username not in self.settings["registered_usernames"]:
             self.send(f"This username is not registered\r\n")
@@ -234,6 +249,7 @@ class NickServ(Communicator):
 
         if removed_username is None:
             removed_username = username
+        removed_username = self.get_username_main(removed_username)
 
         if removed_username not in self.settings["registered_usernames"]:
             self.send(f"This username is not registered\r\n")
@@ -289,8 +305,10 @@ class NickServ(Communicator):
         if not whois:
             whois = await self.whois(username)
 
+        main = self.get_username_main(username)
+
         prefixes = ""
-        if whois["fingerprint"] not in self.settings["registered_usernames"].get(username, []):
+        if whois["fingerprint"] not in self.settings["registered_usernames"].get(main, []):
             prefixes += "?"
         if "room/op" in whois:
             prefixes = "@"
