@@ -141,6 +141,10 @@ class NickServ(Communicator):
             await self.do_ban(username, *args)
         elif command == "banip":
             await self.do_banip(username, *args)
+        elif command == "unban":
+            await self.do_unban(username, *args)
+        elif command == "unbanip":
+            await self.do_unbanip(username, *args)
         elif command in ("exit", "quit", "names"):
             self.send(f"You're probably confusing me with the chat system. Use /{command} instead of !{command}.\r\n")
 
@@ -149,7 +153,7 @@ class NickServ(Communicator):
         if topic.startswith("!"):
             topic = topic[1:]
         if topic == "help":
-            self.send("Hi, I'm NickServ. Here's what I can do: !help !register !unregister !trust !distrust !ban !banip. Use '!help [topic]' for more info.\r\n")
+            self.send("Hi, I'm NickServ. Here's what I can do: !help !register !unregister !trust !distrust !ban !banip !unban !unbanip. Use '!help [topic]' for more info.\r\n")
         elif topic == "register":
             self.send("Use !register to reserve a username for yourself (i.e.: only your SSH key will be allowed to use it). Example: !register to register your current name, !register <nickname> to register another name.\r\n")
         elif topic == "unregister":
@@ -162,6 +166,10 @@ class NickServ(Communicator):
             self.send("Ban user(s) by username (for OPs only)\r\n")
         elif topic == "banip":
             self.send("Ban user(s) by IP (for OPs only)\r\n")
+        elif topic == "unban":
+            self.send("Unban user(s) by username (for OPs only)\r\n")
+        elif topic == "unbanip":
+            self.send("Unban user(s) by IP (for OPs only)\r\n")
         else:
             self.send(f"Unknown topic !{topic}\r\n")
 
@@ -298,6 +306,46 @@ class NickServ(Communicator):
         for arg in args:
             self.settings["banned_ips"].append(arg)
             self.send(f"IP {arg} is now banned.\r\n")
+        self.save_settings()
+
+
+    async def do_unban(self, username, *args):
+        whois = await self.whois(username)
+        if "room/op" not in whois:
+            self.send(f"You are not an OP\r\n")
+            return
+
+        if not args:
+            self.send(f"Invalid syntax\r\n")
+            return
+
+        old_list = self.settings["banned_usernames"]
+        new_list = [username for username in old_list if username not in args]
+        if len(new_list) == len(old_list):
+            self.send(f"No changes\r\n")
+        else:
+            self.settings["banned_usernames"] = new_list
+            self.send(f"Unbanned\r\n")
+        self.save_settings()
+
+
+    async def do_unbanip(self, username, *args):
+        whois = await self.whois(username)
+        if "room/op" not in whois:
+            self.send(f"You are not an OP\r\n")
+            return
+
+        if not args:
+            self.send(f"Invalid syntax\r\n")
+            return
+
+        old_list = self.settings["banned_ips"]
+        new_list = [ip for ip in old_list if ip not in args]
+        if len(new_list) == len(old_list):
+            self.send(f"No changes\r\n")
+        else:
+            self.settings["banned_ips"] = new_list
+            self.send(f"Unbanned\r\n")
         self.save_settings()
 
 
