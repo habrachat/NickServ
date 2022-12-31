@@ -292,7 +292,7 @@ class NickServ(Communicator):
         self.send(f"{removed_fingerprint} is not registered to {removed_username} anymore.\r\n")
 
 
-    async def do_ban(self, username, banned_username=None, reason="(no reason)"):
+    async def do_ban(self, username, banned_username=None, *reason):
         whois = await self.whois(username)
         if "room/op" not in whois:
             self.send("You are not an OP\r\n")
@@ -302,12 +302,12 @@ class NickServ(Communicator):
             self.send("Invalid syntax\r\n")
             return
 
-        self.settings["banned_usernames"][banned_username] = reason
+        self.settings["banned_usernames"][banned_username] = " ".join(reason) or "(no reason)"
         self.send(f"User {banned_username} is now banned.\r\n")
         self.save_settings()
 
 
-    async def do_banip(self, username, banned_ip=None, reason="(no reason)"):
+    async def do_banip(self, username, banned_ip=None, *reason):
         whois = await self.whois(username)
         if "room/op" not in whois:
             self.send("You are not an OP\r\n")
@@ -317,7 +317,7 @@ class NickServ(Communicator):
             self.send("Invalid syntax\r\n")
             return
 
-        self.settings["banned_ips"][banned_ip] = reason
+        self.settings["banned_ips"][banned_ip] = " ".join(reason) or "(no reason)"
         self.send(f"IP {banned_ip} is now banned.\r\n")
         self.save_settings()
 
