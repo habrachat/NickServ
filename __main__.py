@@ -333,7 +333,7 @@ class NickServ(Communicator):
             return
 
         old_list = self.settings["banned_usernames"]
-        new_list = [username for username in old_list if username not in args]
+        new_list = {username: reason for username, reason in old_list.items() if username not in args}
         if len(new_list) == len(old_list):
             self.send(f"No changes\r\n")
         else:
@@ -353,7 +353,7 @@ class NickServ(Communicator):
             return
 
         old_list = self.settings["banned_ips"]
-        new_list = [ip for ip in old_list if ip not in args]
+        new_list = {ip: reason for ip, reason in old_list.items() if ip not in args}
         if len(new_list) == len(old_list):
             self.send(f"No changes\r\n")
         else:
