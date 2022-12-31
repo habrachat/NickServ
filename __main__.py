@@ -2,7 +2,6 @@ import asyncio
 import os
 import re
 import json
-import fnmatch
 
 from .comm import Communicator
 
@@ -16,10 +15,11 @@ class NickServ(Communicator):
         with open(self.settings_path) as f:
             self.settings = json.loads(f.read())
 
-        if "banned_usernames" not in self.settings:
-            self.settings["banned_usernames"] = []
-        if "banned_ips" not in self.settings:
-            self.settings["banned_ips"] = []
+        for key in ("banned_usernames", "banned_ips"):
+            if key not in self.settings:
+                self.settings[key] = {}
+            elif isinstance(self.settings[key], list):
+                self.settings[key] = {username: "(no reason)" for username in self.settings[key]}
 
         if "registered_usernames" in self.settings:
             self.settings["registered_usernames"] = {
@@ -46,13 +46,25 @@ class NickServ(Communicator):
         return username.partition("+")[0]
 
 
-    def is_username_banned(self, username):
+    def get_username_ban_reason(self, username):
         main = self.get_username_main(username)
-        return any(fnmatch.fnmatch(username, glob) or fnmatch.fnmatch(main, glob) for glob in self.settings["banned_usernames"])
+        for regex, reason in self.settings["banned_usernames"].items():
+            try:
+                if re.match(f"^{regex}$", username) or re.match(f"^{regex}$", main):
+                    return reason
+            except Exception:
+                pass
+        return None
 
 
-    def is_ip_banned(self, ip):
-        return any(fnmatch.fnmatch(ip, glob) for glob in self.settings["banned_ips"])
+    def get_ip_ban_reason(self, ip):
+        for regex, reason in self.settings["banned_ips"].items():
+            try:
+                if re.match(f"^{regex}$", ip):
+                    return reason
+            except Exception:
+                pass
+        return None
 
 
     def make_rand_name(self):
@@ -78,13 +90,15 @@ class NickServ(Communicator):
 
 
     async def on_user_joined(self, username):
-        if self.is_username_banned(username):
-            self.send(f"{username}, sorry, this username is banned\r\n/rename {username} {self.make_rand_name()}\r\n")
+        reason = self.get_username_ban_reason(username)
+        if reason is not None:
+            self.send(f"/msg {username} Sorry, your username is banned. Reason: {reason}\r\n/rename {username} {self.make_rand_name()}\r\n")
             return
 
         whois = await self.whois(username)
-        if self.is_ip_banned(whois["ip"]):
-            self.send(f"{username}, sorry, your IP is banned\r\n/kick {username}\r\n")
+        reason = self.get_ip_ban_reason(whois["ip"])
+        if reason is not None:
+            self.send(f"/msg {username} Sorry, your IP is banned. Reason: {reason}\r\n/kick {username}\r\n")
             return
 
         main = self.get_username_main(username)
@@ -102,8 +116,9 @@ class NickServ(Communicator):
 
 
     async def on_user_renamed(self, old, new):
-        if self.is_username_banned(new):
-            self.send(f"{new}, sorry, this username is banned\r\n/rename {new} {old}\r\n")
+        reason = self.get_username_ban_reason(new)
+        if reason:
+            self.send(f"/msg {new} Sorry, this username is banned. Reason: {reason}\r\n/rename {new} {old}\r\n")
             return
 
         new_main = self.get_username_main(new)
@@ -163,9 +178,9 @@ class NickServ(Communicator):
         elif topic == "distrust":
             self.send("If your username is registered to multiple SSH keys, remove one key from the trust list. Examples: !distrust (removes current key), !distrust <fingerprint> (removes some fingerprint), !distrust <fingerprint> <username>.\r\n")
         elif topic == "ban":
-            self.send("Ban user(s) by username (for OPs only)\r\n")
+            self.send("Ban user(s) by username (for OPs only). Example !ban root Common username\r\n")
         elif topic == "banip":
-            self.send("Ban user(s) by IP (for OPs only)\r\n")
+            self.send("Ban user(s) by IP (for OPs only). Example !ban 127.* Local network\r\n")
         elif topic == "unban":
             self.send("Unban user(s) by username (for OPs only)\r\n")
         elif topic == "unbanip":
@@ -277,35 +292,33 @@ class NickServ(Communicator):
         self.send(f"{removed_fingerprint} is not registered to {removed_username} anymore.\r\n")
 
 
-    async def do_ban(self, username, *args):
+    async def do_ban(self, username, banned_username=None, reason="(no reason)"):
         whois = await self.whois(username)
         if "room/op" not in whois:
-            self.send(f"You are not an OP\r\n")
+            self.send("You are not an OP\r\n")
             return
 
-        if not args:
-            self.send(f"Invalid syntax\r\n")
+        if not banned_username:
+            self.send("Invalid syntax\r\n")
             return
 
-        for arg in args:
-            self.settings["banned_usernames"].append(arg)
-            self.send(f"User {arg} is now banned.\r\n")
+        self.settings["banned_usernames"][banned_username] = reason
+        self.send(f"User {banned_username} is now banned.\r\n")
         self.save_settings()
 
 
-    async def do_banip(self, username, *args):
+    async def do_banip(self, username, banned_ip=None, reason="(no reason)"):
         whois = await self.whois(username)
         if "room/op" not in whois:
-            self.send(f"You are not an OP\r\n")
+            self.send("You are not an OP\r\n")
             return
 
-        if not args:
-            self.send(f"Invalid syntax\r\n")
+        if not banned_ip:
+            self.send("Invalid syntax\r\n")
             return
 
-        for arg in args:
-            self.settings["banned_ips"].append(arg)
-            self.send(f"IP {arg} is now banned.\r\n")
+        self.settings["banned_ips"][banned_ip] = reason
+        self.send(f"IP {banned_ip} is now banned.\r\n")
         self.save_settings()
 
 
