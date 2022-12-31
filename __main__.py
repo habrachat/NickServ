@@ -90,15 +90,15 @@ class NickServ(Communicator):
 
 
     async def on_user_joined(self, username):
-        reason = self.get_username_ban_reason(username)
-        if reason is not None:
-            self.send(f"/msg {username} Sorry, your username is banned. Reason: {reason}\r\n/rename {username} {self.make_rand_name()}\r\n")
-            return
-
         whois = await self.whois(username)
         reason = self.get_ip_ban_reason(whois["ip"])
         if reason is not None:
             self.send(f"/msg {username} Sorry, your IP is banned. Reason: {reason}\r\n/kick {username}\r\n")
+            return
+
+        reason = self.get_username_ban_reason(username)
+        if reason is not None:
+            self.send(f"/msg {username} Sorry, your username is banned. Reason: {reason}\r\n/rename {username} {self.make_rand_name()}\r\n")
             return
 
         main = self.get_username_main(username)
