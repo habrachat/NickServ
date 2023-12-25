@@ -93,7 +93,9 @@ class NickServ(Communicator):
         whois = await self.whois(username)
         reason = self.get_ip_ban_reason(whois["ip"])
         if reason is not None:
-            self.send(f"/msg {username} Sorry, your IP is banned. Reason: {reason}\r\n/kick {username}\r\n")
+            self.send(f"/msg {username} Sorry, your IP is banned. Reason: {reason}\r\n")
+            await asyncio.sleep(0.1)
+            self.send(f"/kick {username}\r\n")
             return
 
         reason = self.get_username_ban_reason(username)
