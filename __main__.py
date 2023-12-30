@@ -162,7 +162,11 @@ class NickServ(Communicator):
             await self.do_unban(username, *args)
         elif command == "unbanip":
             await self.do_unbanip(username, *args)
-        elif command in ("exit", "quit", "names"):
+        elif command in ("exit", "quit"):
+            self.send(f"You're probably confusing me with the chat system. Prefer /{command} to !{command}.\r\n")
+            await asyncio.sleep(0.1)
+            self.send(f"/kick {username}\r\n")
+        elif command == "names":
             self.send(f"You're probably confusing me with the chat system. Use /{command} instead of !{command}.\r\n")
 
 
@@ -170,7 +174,7 @@ class NickServ(Communicator):
         if topic.startswith("!"):
             topic = topic[1:]
         if topic == "help":
-            self.send("Hi, I'm NickServ. Here's what I can do: !help !register !unregister !trust !distrust !ban !banip !unban !unbanip. Use '!help [topic]' for more info.\r\n")
+            self.send("Hi, I'm NickServ. Here's what I can do: !help !register !unregister !trust !distrust !ban !banip !unban !unbanip !exit !quit. Use '!help [topic]' for more info.\r\n")
         elif topic == "register":
             self.send("Use !register to reserve a username for yourself (i.e.: only your SSH key will be allowed to use it). Example: !register to register your current name, !register <nickname> to register another name.\r\n")
         elif topic == "unregister":
@@ -187,6 +191,8 @@ class NickServ(Communicator):
             self.send("Unban user(s) by username (for OPs only)\r\n")
         elif topic == "unbanip":
             self.send("Unban user(s) by IP (for OPs only)\r\n")
+        elif topic in ("exit", "quit"):
+            self.send(f"Leave the chat. You'd better use /{topic} instead of !{topic} though.\r\n")
         else:
             self.send(f"Unknown topic !{topic}\r\n")
 
