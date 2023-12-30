@@ -163,11 +163,11 @@ class NickServ(Communicator):
         elif command == "unbanip":
             await self.do_unbanip(username, *args)
         elif command in ("exit", "quit"):
-            self.send(f"You're probably confusing me with the chat system. Prefer /{command} to !{command}.\r\n")
+            self.send(f"/msg {username} You're probably confusing me with the chat system. Prefer /{command} to !{command}.\r\n")
             await asyncio.sleep(0.1)
             self.send(f"/kick {username}\r\n")
         elif command == "names":
-            self.send(f"You're probably confusing me with the chat system. Use /{command} instead of !{command}.\r\n")
+            self.send(f"/msg {username} You're probably confusing me with the chat system. Use /{command} instead of !{command}.\r\n")
 
 
     def do_help(self, topic="help", *_):
